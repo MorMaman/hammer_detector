@@ -10,6 +10,7 @@ Finds stocks where a hammer candlestick forms at a trendline - a potential rever
 - Detects **hammer patterns** using configurable criteria
 - Checks if hammer touches trendline within **2% tolerance**
 - Scans last **5 days** for recent signals
+- **Telegram bot** for alerts and on-demand scans
 
 ## Installation
 
@@ -17,36 +18,48 @@ Finds stocks where a hammer candlestick forms at a trendline - a potential rever
 cd trendline-scanner
 python -m venv venv
 source venv/bin/activate
-pip install pandas requests scipy yfinance
-```
-
-Optional (for better hammer detection):
-```bash
-pip install TA-Lib
+pip install -r requirements.txt
 ```
 
 ## Usage
 
-### Quick Scan
+### CLI Scanner
 ```bash
-python run_scanner.py
+python run_scanner.py                    # Scan all patterns
+python run_scanner.py --pattern wedgeup  # Scan specific pattern
+python run_scanner.py AAPL MSFT ASND     # Scan specific symbols
+python run_scanner.py --tolerance 1.5    # Adjust tolerance
 ```
 
-### Scan Specific Pattern
-```bash
-python run_scanner.py --pattern wedgeup
-python run_scanner.py --pattern channeldown
-```
+### Telegram Bot
 
-### Scan Specific Symbols
-```bash
-python run_scanner.py AAPL MSFT ASND
-```
+1. Create a bot with [@BotFather](https://t.me/BotFather) on Telegram
+2. Copy the token
+3. Create `.env` file:
+   ```
+   TELEGRAM_BOT_TOKEN=your_token_here
+   TELEGRAM_ADMIN_CHAT_ID=your_chat_id  # Optional, for admin alerts
+   ```
+4. Run the bot:
+   ```bash
+   python telegram_bot.py
+   ```
 
-### Adjust Tolerance
-```bash
-python run_scanner.py --tolerance 1.5  # 1.5% instead of 2%
-```
+#### Bot Commands
+| Command | Description |
+|---------|-------------|
+| `/start` | Welcome message and help |
+| `/scan` | Full scan (5 days, all patterns) |
+| `/quick` | Quick scan (today only) |
+| `/settings` | Adjust tolerance, patterns, lookback |
+| `/alerts` | Toggle alert notifications |
+
+#### Bot Features
+- **Inline keyboards** for pattern selection
+- **Tolerance adjustment** (1%, 1.5%, 2%, 3%)
+- **Lookback settings** (1, 3, 5, 7 days)
+- **Scheduled scans** - Hourly during market hours
+- **Daily reports** - 4:30 PM ET
 
 ## Output
 
@@ -63,7 +76,9 @@ HAMMERS ON BLUE TRENDLINE - Last 5 Days: 4
 
 | File | Description |
 |------|-------------|
-| `run_scanner.py` | Main CLI scanner |
+| `telegram_bot.py` | Telegram bot with commands and scheduled scans |
+| `scanner_service.py` | Scanner wrapper for bot integration |
+| `run_scanner.py` | CLI scanner |
 | `finviz_direct.py` | Fetches Finviz trendline data |
 | `hammer_detector.py` | Hammer candlestick detection |
 | `data_fetcher.py` | Price data from yfinance |
