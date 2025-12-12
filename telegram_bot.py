@@ -36,8 +36,9 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 ADMIN_CHAT_ID = os.getenv('TELEGRAM_ADMIN_CHAT_ID')  # Your chat ID for alerts
 
-# Timezone for US market
-ET = pytz.timezone('America/New_York')
+# Timezones
+ET = pytz.timezone('America/New_York')  # US market timezone
+IST = pytz.timezone('Asia/Jerusalem')   # Israel timezone for display
 
 # Market hours (Eastern Time)
 MARKET_OPEN_HOUR = 9
@@ -80,7 +81,7 @@ def is_market_open() -> bool:
 
 
 def get_next_market_event() -> tuple:
-    """Get the next market open or close event"""
+    """Get the next market open or close event (returns time in Israel timezone)"""
     now = datetime.now(ET)
     today = now.date()
 
@@ -90,9 +91,9 @@ def get_next_market_event() -> tuple:
     # If it's a weekday
     if now.weekday() < 5:
         if now < market_open_today:
-            return ('open', market_open_today)
+            return ('open', market_open_today.astimezone(IST))
         elif now < market_close_today:
-            return ('close', market_close_today)
+            return ('close', market_close_today.astimezone(IST))
 
     # Find next trading day
     next_day = today + timedelta(days=1)
@@ -100,7 +101,7 @@ def get_next_market_event() -> tuple:
         next_day += timedelta(days=1)
 
     next_open = ET.localize(datetime.combine(next_day, time(MARKET_OPEN_HOUR, MARKET_OPEN_MINUTE)))
-    return ('open', next_open)
+    return ('open', next_open.astimezone(IST))
 
 
 # Command Handlers
@@ -113,7 +114,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Check market status
     market_status = "🟢 OPEN" if is_market_open() else "🔴 CLOSED"
     event_type, event_time = get_next_market_event()
-    next_event = f"Next {event_type}: {event_time.strftime('%a %I:%M %p ET')}"
+    next_event = f"Next {event_type}: {event_time.strftime('%a %H:%M')} 🇮🇱"
 
     welcome_text = (
         "🔨 *Hammer Scanner Bot*\n\n"
@@ -139,24 +140,29 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def market_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show current market status"""
-    now = datetime.now(ET)
+    """Show current market status in Israel time"""
+    now_et = datetime.now(ET)
+    now_ist = datetime.now(IST)
     is_open = is_market_open()
-    event_type, event_time = get_next_market_event()
+    event_type, event_time = get_next_market_event()  # Already in IST
 
     if is_open:
-        time_to_close = event_time - now
+        # Calculate time to close
+        now_ist_aware = now_ist if now_ist.tzinfo else IST.localize(now_ist)
+        time_to_close = event_time - now_ist_aware
         hours, remainder = divmod(int(time_to_close.total_seconds()), 3600)
         minutes = remainder // 60
         status_text = (
             "🟢 *Market is OPEN*\n\n"
-            f"Current time: {now.strftime('%I:%M %p ET')}\n"
-            f"Closes at: {event_time.strftime('%I:%M %p ET')}\n"
+            f"🇮🇱 Current time: {now_ist.strftime('%H:%M')}\n"
+            f"🇮🇱 Closes at: {event_time.strftime('%H:%M')}\n"
             f"Time remaining: {hours}h {minutes}m\n\n"
             "_You can buy and sell stocks now!_"
         )
     else:
-        time_to_open = event_time - now
+        # Calculate time to open
+        now_ist_aware = now_ist if now_ist.tzinfo else IST.localize(now_ist)
+        time_to_open = event_time - now_ist_aware
         days = time_to_open.days
         hours, remainder = divmod(int(time_to_open.total_seconds()) % 86400, 3600)
         minutes = remainder // 60
@@ -168,10 +174,10 @@ async def market_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
         status_text = (
             "🔴 *Market is CLOSED*\n\n"
-            f"Current time: {now.strftime('%I:%M %p ET')}\n"
-            f"Opens: {event_time.strftime('%a %b %d at %I:%M %p ET')}\n"
+            f"🇮🇱 Current time: {now_ist.strftime('%H:%M')}\n"
+            f"🇮🇱 Opens: {event_time.strftime('%a %b %d at %H:%M')}\n"
             f"Time until open: {time_str}\n\n"
-            "_Market hours: Mon-Fri 9:30 AM - 4:00 PM ET_"
+            "_Market hours: Mon-Fri 16:30 - 23:00 Israel time_"
         )
 
     await update.message.reply_text(status_text, parse_mode='Markdown')
@@ -444,7 +450,7 @@ async def market_open_warning(context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("Sending market open warning (15 min)...")
     message = (
         "⏰ *15 Minutes Until Market Opens!*\n\n"
-        "🟢 Market opens at 9:30 AM ET\n\n"
+        "🇮🇱 Market opens at 16:30 Israel time\n\n"
         "_Get ready to trade! Use /scan to find opportunities._"
     )
     await send_to_users(context, message, 'market_alerts')
@@ -455,7 +461,7 @@ async def market_open_notification(context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("Sending market open notification...")
     message = (
         "🔔 *Market is NOW OPEN!*\n\n"
-        "🟢 Trading hours: 9:30 AM - 4:00 PM ET\n\n"
+        "🇮🇱 Trading hours: 16:30 - 23:00 Israel time\n\n"
         "_You can now buy and sell stocks!_\n"
         "_Use /scan to find hammer signals._"
     )
@@ -467,7 +473,7 @@ async def market_close_warning(context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("Sending market close warning (15 min)...")
     message = (
         "⏰ *15 Minutes Until Market Closes!*\n\n"
-        "🔴 Market closes at 4:00 PM ET\n\n"
+        "🇮🇱 Market closes at 23:00 Israel time\n\n"
         "_Finish your trades soon!_"
     )
     await send_to_users(context, message, 'market_alerts')
@@ -479,7 +485,7 @@ async def market_close_notification(context: ContextTypes.DEFAULT_TYPE) -> None:
     message = (
         "🔔 *Market is NOW CLOSED!*\n\n"
         "🔴 Trading has ended for today.\n"
-        "📅 Next open: Tomorrow at 9:30 AM ET (if weekday)\n\n"
+        "🇮🇱 Next open: Tomorrow at 16:30 Israel time (if weekday)\n\n"
         "_See you tomorrow!_"
     )
     await send_to_users(context, message, 'market_alerts')
@@ -517,7 +523,7 @@ async def daily_report(context: ContextTypes.DEFAULT_TYPE) -> None:
 
         message = (
             "📊 *Daily Report*\n"
-            f"_{datetime.now(ET).strftime('%Y-%m-%d %I:%M %p ET')}_\n\n"
+            f"🇮🇱 _{datetime.now(IST).strftime('%Y-%m-%d %H:%M')}_\n\n"
             + format_results_for_telegram(results)
         )
         await send_to_users(context, message, 'alerts_enabled')
@@ -570,12 +576,12 @@ def main() -> None:
 
     print("🤖 Bot starting...")
     print("Commands: /start, /scan, /quick, /market, /settings, /alerts, /help")
-    print("Market Alerts:")
-    print("  - 15 min before open (9:15 AM ET)")
-    print("  - Market open (9:30 AM ET)")
-    print("  - 15 min before close (3:45 PM ET)")
-    print("  - Market close (4:00 PM ET)")
-    print("Scheduled: Hourly scans + Daily report at 4:30 PM ET")
+    print("Market Alerts (Israel time 🇮🇱):")
+    print("  - 15 min before open (16:15)")
+    print("  - Market open (16:30)")
+    print("  - 15 min before close (22:45)")
+    print("  - Market close (23:00)")
+    print("Scheduled: Hourly scans + Daily report at 23:30 Israel time")
 
     # Run the bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)
