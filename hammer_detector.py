@@ -108,26 +108,27 @@ def detect_hammer_talib(df: pd.DataFrame) -> List[HammerSignal]:
 
 def detect_hammer_manual(
     df: pd.DataFrame,
-    lower_wick_min_pct: float = 0.55,  # Lower wick must be at least 55% of range (Finviz uses ~60%)
-    upper_wick_max_pct: float = 0.25,  # Upper wick must be at most 25% of range
-    body_max_pct: float = 0.45,        # Body must be at most 45% of range (Finviz allows up to 40%)
-    min_range_pct: float = 1.0         # Minimum range as % of price (filter tiny candles)
+    body_ratio: float = 0.35,
+    wick_ratio: float = 1.5,
+    min_range_pct: float = 2.0,
+    min_body_pct: float = 0.5
 ) -> List[HammerSignal]:
     """
-    Manual hammer detection matching Finviz criteria.
+    Manual hammer detection without TA-Lib.
 
-    Finviz Hammer criteria (based on analysis of CEFD, CADL, BANR, BY, DTSS):
-    - Lower wick >= 55% of total range (all Finviz hammers have 60-85%)
-    - Upper wick <= 25% of total range (most have <20%)
-    - Body <= 45% of total range (most have <40%)
-    - Total range >= 1% of price (filter noise)
+    Hammer criteria:
+    - Total range is at least 3% of the price (filters tiny candles)
+    - Body is at least 1% of the price (filters insignificant bodies)
+    - Body is in the upper 35% of the candle range
+    - Lower wick is at least 1.5x the body size (relaxed from 2x to match Finviz)
+    - Upper wick is less than 50% of the body
 
     Args:
         df: DataFrame with OHLCV data
-        lower_wick_min_pct: Minimum lower wick as percentage of total range
-        upper_wick_max_pct: Maximum upper wick as percentage of total range
-        body_max_pct: Maximum body size as percentage of total range
-        min_range_pct: Minimum total range as percentage of price
+        body_ratio: Maximum body size as ratio of total range
+        wick_ratio: Minimum lower wick size as multiple of body
+        min_range_pct: Minimum total range as percentage of price (filters tiny candles)
+        min_body_pct: Minimum body size as percentage of price
 
     Returns:
         List of HammerSignal objects
@@ -146,36 +147,41 @@ def detect_hammer_manual(
             continue
 
         body = abs(c - o)
-        lower_wick = min(o, c) - l
-        upper_wick = h - max(o, c)
 
-        # Calculate ratios as percentage of total range
-        body_pct = body / total_range
-        lower_wick_pct = lower_wick / total_range
-        upper_wick_pct = upper_wick / total_range
-
-        # Filter out tiny candles
+        # Filter out tiny candles - range must be at least min_range_pct of price
+        # This filters noise like ALLY ($0.67 range on $42 stock = 1.6%)
+        # but keeps real hammers like ASND ($9.61 range on $200 stock = 4.8%)
         range_pct = (total_range / c) * 100
         if range_pct < min_range_pct:
             continue
 
-        # Check for hammer pattern (Finviz style)
-        # Key: Lower wick must be dominant (>55% of range)
+        # Filter out insignificant body sizes
+        # ASND: body=$3.23 (1.6% of $200) = significant
+        # AAOI: body=$0.35 (1.3% of $27) = borderline, but range is small
+        body_pct = (body / c) * 100
+        if body_pct < min_body_pct:
+            continue
+
+        lower_wick = min(o, c) - l
+        upper_wick = h - max(o, c)
+
+        # Check for hammer pattern
         is_hammer = (
-            lower_wick_pct >= lower_wick_min_pct and  # Long lower wick (dominant)
-            upper_wick_pct <= upper_wick_max_pct and  # Short upper wick
-            body_pct <= body_max_pct                   # Body not too big
+            body <= total_range * body_ratio and  # Small body
+            lower_wick >= body * wick_ratio and   # Long lower wick
+            upper_wick <= body * 0.5               # Short upper wick
         )
 
         # Check for inverted hammer pattern
         is_inverted = (
-            upper_wick_pct >= lower_wick_min_pct and  # Long upper wick (dominant)
-            lower_wick_pct <= upper_wick_max_pct and  # Short lower wick
-            body_pct <= body_max_pct                   # Body not too big
+            body <= total_range * body_ratio and  # Small body
+            upper_wick >= body * wick_ratio and   # Long upper wick
+            lower_wick <= body * 0.5               # Short lower wick
         )
 
         if is_hammer or is_inverted:
             # Determine if bullish based on context (simplified)
+            # For proper context, we'd look at prior trend
             is_bullish = c > o  # Green candle is more bullish
 
             signal = HammerSignal(
