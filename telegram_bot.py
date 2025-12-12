@@ -202,12 +202,12 @@ async def scan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Add scan info and market status
         market_status = "🟢 OPEN" if is_market_open() else "🔴 CLOSED"
         message = (
-            f"📊 *Scan Results* | Market: {market_status}\n"
-            f"_Tolerance: {settings['tolerance']}% | Lookback: {settings['lookback_days']} days_\n\n"
+            f"📊 Scan Results | Market: {market_status}\n"
+            f"Tolerance: {settings['tolerance']}% | Lookback: {settings['lookback_days']} days\n\n"
             + message
         )
 
-        await update.message.reply_text(message, parse_mode='Markdown')
+        await update.message.reply_text(message)
 
     except Exception as e:
         logger.error(f"Scan error: {e}")
@@ -234,9 +234,9 @@ async def quick_scan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
         message = format_results_for_telegram(results)
         market_status = "🟢 OPEN" if is_market_open() else "🔴 CLOSED"
-        message = f"⚡ *Quick Scan - Today Only* | Market: {market_status}\n\n" + message
+        message = f"⚡ Quick Scan - Today Only | Market: {market_status}\n\n" + message
 
-        await update.message.reply_text(message, parse_mode='Markdown')
+        await update.message.reply_text(message)
 
     except Exception as e:
         logger.error(f"Quick scan error: {e}")
@@ -416,15 +416,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 # Scheduled Jobs
 
-async def send_to_users(context: ContextTypes.DEFAULT_TYPE, message: str, check_setting: str = None) -> None:
+async def send_to_users(context: ContextTypes.DEFAULT_TYPE, message: str, check_setting: str = None, use_markdown: bool = True) -> None:
     """Send message to all registered users"""
+    parse_mode = 'Markdown' if use_markdown else None
+
     # Send to admin first
     if ADMIN_CHAT_ID:
         try:
             await context.bot.send_message(
                 chat_id=ADMIN_CHAT_ID,
                 text=message,
-                parse_mode='Markdown'
+                parse_mode=parse_mode
             )
         except Exception as e:
             logger.error(f"Failed to send to admin: {e}")
@@ -439,7 +441,7 @@ async def send_to_users(context: ContextTypes.DEFAULT_TYPE, message: str, check_
             await context.bot.send_message(
                 chat_id=user_id,
                 text=message,
-                parse_mode='Markdown'
+                parse_mode=parse_mode
             )
         except Exception as e:
             logger.error(f"Failed to send to {user_id}: {e}")
@@ -507,8 +509,8 @@ async def scheduled_scan(context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.info("No signals found in scheduled scan")
             return
 
-        message = "🔔 *Scheduled Alert*\n\n" + format_results_for_telegram(results)
-        await send_to_users(context, message, 'alerts_enabled')
+        message = "🔔 Scheduled Alert\n\n" + format_results_for_telegram(results)
+        await send_to_users(context, message, 'alerts_enabled', use_markdown=False)
 
     except Exception as e:
         logger.error(f"Scheduled scan error: {e}")
@@ -522,11 +524,11 @@ async def daily_report(context: ContextTypes.DEFAULT_TYPE) -> None:
         results = scan_for_hammers(lookback_days=5, tolerance=2.0)
 
         message = (
-            "📊 *Daily Report*\n"
-            f"🇮🇱 _{datetime.now(IST).strftime('%Y-%m-%d %H:%M')}_\n\n"
+            "📊 Daily Report\n"
+            f"🇮🇱 {datetime.now(IST).strftime('%Y-%m-%d %H:%M')}\n\n"
             + format_results_for_telegram(results)
         )
-        await send_to_users(context, message, 'alerts_enabled')
+        await send_to_users(context, message, 'alerts_enabled', use_markdown=False)
 
     except Exception as e:
         logger.error(f"Daily report error: {e}")

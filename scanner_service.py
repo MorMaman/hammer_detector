@@ -153,11 +153,11 @@ def scan_for_hammers(
 
 
 def format_results_for_telegram(results: Dict[str, List[HammerSignal]]) -> str:
-    """Format scan results for Telegram message"""
+    """Format scan results for Telegram message (plain text, no Markdown)"""
     lines = []
 
     # BLUE (support) - MOST IMPORTANT
-    lines.append("🔵 *HAMMERS ON BLUE TRENDLINE*")
+    lines.append("🔵 HAMMERS ON BLUE TRENDLINE")
     lines.append(f"Found: {len(results['blue'])} signals")
     lines.append("")
 
@@ -165,19 +165,19 @@ def format_results_for_telegram(results: Dict[str, List[HammerSignal]]) -> str:
         for signal in results['blue']:
             days_label = "TODAY" if signal.days_ago == 0 else f"{signal.days_ago}d ago"
             lines.append(
-                f"• *{signal.symbol}* ({days_label})\n"
+                f"• {signal.symbol} ({days_label})\n"
                 f"  Blue: ${signal.line_price:.2f} | Low: ${signal.price:.2f}\n"
                 f"  Distance: {signal.distance:+.1f}% | {signal.hammer_type}"
             )
     else:
-        lines.append("_No signals found_")
+        lines.append("No signals found")
 
     lines.append("")
-    lines.append("─" * 30)
+    lines.append("------------------------")
     lines.append("")
 
     # UPPER (resistance)
-    lines.append("🔴 *HAMMERS ON UPPER RESISTANCE*")
+    lines.append("🔴 HAMMERS ON UPPER RESISTANCE")
     lines.append(f"Found: {len(results['upper'])} signals")
     lines.append("")
 
@@ -185,12 +185,12 @@ def format_results_for_telegram(results: Dict[str, List[HammerSignal]]) -> str:
         for signal in results['upper']:
             days_label = "TODAY" if signal.days_ago == 0 else f"{signal.days_ago}d ago"
             lines.append(
-                f"• *{signal.symbol}* ({days_label})\n"
+                f"• {signal.symbol} ({days_label})\n"
                 f"  Upper: ${signal.line_price:.2f} | High: ${signal.price:.2f}\n"
                 f"  Distance: {signal.distance:+.1f}% | {signal.hammer_type}"
             )
     else:
-        lines.append("_No signals found_")
+        lines.append("No signals found")
 
     return "\n".join(lines)
 
